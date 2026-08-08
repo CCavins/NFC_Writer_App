@@ -9,18 +9,21 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QStatusBar, QMessageBox, QGroupBox, QComboBox,
     QMenuBar, QFileDialog, QListWidget, QListWidgetItem, QCheckBox, QProgressBar,
-    QScrollArea, QSizePolicy
+    QScrollArea, QSizePolicy, QApplication, QSystemTrayIcon
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot, pyqtSignal, QThread
-from PyQt6.QtGui import QColor, QPalette, QImage, QPixmap
+from PyQt6.QtCore import Qt, QTimer, pyqtSlot, pyqtSignal, QThread, QRect
+from PyQt6.QtGui import (
+    QColor, QPalette, QImage, QPixmap, QFontDatabase, QIcon, QPainter,
+    QShortcut, QKeySequence
+)
 from PyQt6 import uic
 import sys
 
 from ..config.settings import Settings
 from ..nfc.nfc_manager import NFCManager
 from ..qr.qr_scanner import QRScanner, QRScannerWorker
+from . import theme
 from .settings_dialog import SettingsDialog
-from .qr_dialog import QRScanDialog
 
 
 class MainWindow(QMainWindow):
@@ -30,7 +33,7 @@ class MainWindow(QMainWindow):
         """Initialize main window."""
         super().__init__()
         self.setWindowTitle("NFC URL Writer")
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(1000, 680)
         self.resize(1400, 900)
         
         # Initialize components
@@ -45,42 +48,25 @@ class MainWindow(QMainWindow):
         self.url_valid = False
         self.tag_detected = False
         self.tag_type = ""
+        self.tag_capacity: Optional[int] = None
         
         # QR Scanner worker
         self.qr_scanner_worker: Optional[QRScannerWorker] = None
+        
+        # System tray icon for notifications (created lazily)
+        self._tray: Optional[QSystemTrayIcon] = None
+        
+        # Theme state: tracked label styles so they can be re-applied
+        # when the theme changes (text, role, bold, italic per label)
+        self._label_states = {}
+        self._dark = theme.resolve_dark_mode(self.settings.dark_mode, self)
+        self.colors = theme.colors(self._dark)
         
         # Setup UI first (loads from .ui file)
         self._setup_ui()
         
         # Setup menu after UI is loaded (menu bar is created programmatically)
         self._setup_menu()
-        
-        # Apply styling after UI is loaded
-        base_style = self._apply_modern_style()
-        scroll_style = """
-            /* Scroll Area */
-            QScrollArea {
-                background-color: #f5f5f7;
-                border: none;
-            }
-            QScrollBar:vertical {
-                background-color: #e5e5e7;
-                width: 12px;
-                border: none;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #d1d1d6;
-                border-radius: 6px;
-                min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #b8b8bc;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """
-        self.setStyleSheet(base_style + scroll_style)
         
         # Connect signals and apply theme
         self._connect_signals()
@@ -98,7 +84,6 @@ class MainWindow(QMainWindow):
         self.success_timer = QTimer()
         self.success_timer.setSingleShot(True)
         self.success_timer.timeout.connect(self._reset_success_indicator)
-        # Note: original_status_palette will be set after _setup_ui() creates status_panel
     
     def _setup_menu(self) -> None:
         """Setup menu bar."""
@@ -112,11 +97,13 @@ class MainWindow(QMainWindow):
             file_menu = menubar.addMenu("File")
             
             import_action = file_menu.addAction("Import URLs...")
+            import_action.setShortcut("Ctrl+O")
             import_action.triggered.connect(self._on_import_urls)
             # Explicitly disable icon to prevent macOS from trying to auto-generate one
             import_action.setIconVisibleInMenu(False)
             
             export_action = file_menu.addAction("Export URLs...")
+            export_action.setShortcut("Ctrl+E")
             export_action.triggered.connect(self._on_export_urls)
             export_action.setIconVisibleInMenu(False)
             
@@ -160,63 +147,23 @@ class MainWindow(QMainWindow):
         # Set up progress bar
         self.write_progress.setRange(0, 0)  # Indeterminate progress
         
-        # Set up status panel styling and store original palette
-        self.status_panel.setStyleSheet("""
-            QWidget {
-                background-color: #f5f5f7;
-                border: 2px solid #e5e5e7;
-                border-radius: 8px;
-            }
-        """)
-        self.original_status_palette = self.status_panel.palette()
-        
-        # Set up retry reader button styling
-        self.retry_reader_button.setProperty("class", "secondary")
-        self.retry_reader_button.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #6e6e73;
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 4px 10px;
-                font-size: 12px;
-                min-height: 26px;
-            }
-            QPushButton:hover {
-                background-color: #f5f5f7;
-                border-color: #007aff;
-                color: #007aff;
-            }
-            QPushButton:pressed {
-                background-color: #e8f2ff;
-            }
-        """)
+        # Low-emphasis style for the retry reader button (styled via theme QSS)
+        self.retry_reader_button.setProperty("class", "subtle")
         
         # Set up camera preview label styling and size policy
         self.camera_preview_label.setProperty("class", "camera-preview")
-        self.camera_preview_label.setStyleSheet("""
-            QLabel[class="camera-preview"] {
-                background-color: #000000;
-                color: #ffffff;
-                border: 2px solid #e5e5e7;
-                border-radius: 12px;
-                font-size: 16px;
-            }
-        """)
         # Allow camera preview to shrink when window is resized, but maintain aspect ratio
         self.camera_preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.camera_preview_label.setScaledContents(False)  # We'll handle scaling manually to maintain aspect ratio
         self.camera_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Set up tag info label styling
-        self.uid_label_title.setStyleSheet("font-size: 11px; color: #666;")
-        self.type_label_title.setStyleSheet("font-size: 11px; color: #666;")
-        self.capacity_label_title.setStyleSheet("font-size: 11px; color: #666;")
-        self.writable_label_title.setStyleSheet("font-size: 11px; color: #666;")
-        self.tag_uid_label.setStyleSheet("font-family: monospace; font-size: 11px;")
+        # Monospace font for the tag UID
+        fixed_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        fixed_font.setPointSize(11)
+        self.tag_uid_label.setFont(fixed_font)
         
         # Set up read URL label
-        self.read_url_label.setStyleSheet("color: #666; font-style: italic;")
+        self._set_label(self.read_url_label, "", role="muted", italic=True)
         self.read_url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.read_url_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         
@@ -237,10 +184,23 @@ class MainWindow(QMainWindow):
         self.stop_camera_button.clicked.connect(self._stop_camera)
         self.read_tag_button.clicked.connect(self._on_read_tag_clicked)
         self.open_url_button.clicked.connect(self._on_open_url_clicked)
+        self.copy_url_button.clicked.connect(self._on_copy_url_clicked)
         self.queue_mode_check.toggled.connect(self._on_queue_mode_toggled)
         self.import_queue_button.clicked.connect(self._on_import_queue_clicked)
         self.clear_queue_button.clicked.connect(self._on_clear_queue_clicked)
         self.reset_progress_button.clicked.connect(self._on_reset_progress_clicked)
+        
+        # Keyboard shortcuts and tooltips
+        self.read_tag_button.setShortcut("Ctrl+R")
+        self.read_tag_button.setToolTip("Read the URL/text from the tag on the reader (Cmd+R / Ctrl+R)")
+        self.write_button.setToolTip("Write the content to the detected tag (Enter in the URL field)")
+        self.retry_button.setToolTip("Load the last successfully written URL back into the field")
+        self.copy_url_button.setToolTip("Copy the URL read from the tag to the clipboard")
+        self.open_url_button.setToolTip("Open the URL read from the tag in your default browser")
+        focus_url_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
+        focus_url_shortcut.activated.connect(
+            lambda: (self.url_input.setFocus(), self.url_input.selectAll())
+        )
         
         # Set initial button states
         self.write_button.setEnabled(False)
@@ -270,11 +230,66 @@ class MainWindow(QMainWindow):
         self.nfc_manager.operation_status.connect(self._on_operation_status)
         self.nfc_manager.tag_read.connect(self._on_tag_read)
     
+    def _set_label(self, label, text: str, role: str = "text",
+                   bold: bool = False, italic: bool = False) -> None:
+        """Set label text with a theme-aware semantic color role.
+        
+        Tracks the state so colors can be re-applied when the theme changes.
+        Roles: text, muted, success, error, warning, info.
+        """
+        self._label_states[label] = (text, role, bold, italic)
+        label.setText(text)
+        self._style_label(label, role, bold, italic)
+    
+    def _style_label(self, label, role: str, bold: bool, italic: bool) -> None:
+        """Apply the current theme color for a semantic role to a label."""
+        parts = [f"color: {self.colors[role]};"]
+        if bold:
+            parts.append("font-weight: bold;")
+        if italic:
+            parts.append("font-style: italic;")
+        label.setStyleSheet(" ".join(parts))
+    
+    def _notify(self, title: str, message: str) -> None:
+        """Show a system notification (best effort)."""
+        try:
+            if not QSystemTrayIcon.isSystemTrayAvailable():
+                return
+            if self._tray is None:
+                # Tray icon is required to post notifications; draw a simple one
+                pixmap = QPixmap(64, 64)
+                pixmap.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(pixmap)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setBrush(QColor(self.colors["accent"]))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(4, 4, 56, 56)
+                painter.setPen(QColor("white"))
+                font = painter.font()
+                font.setPointSize(28)
+                font.setBold(True)
+                painter.setFont(font)
+                painter.drawText(QRect(0, 0, 64, 64), Qt.AlignmentFlag.AlignCenter, "N")
+                painter.end()
+                self._tray = QSystemTrayIcon(QIcon(pixmap), self)
+                self._tray.show()
+            self._tray.showMessage(
+                title, message, QSystemTrayIcon.MessageIcon.Information, 4000
+            )
+        except Exception as e:
+            self.logger.debug(f"Could not show system notification: {e}")
+    
+    @pyqtSlot()
+    def _on_copy_url_clicked(self) -> None:
+        """Handle Copy button click - copy read URL to clipboard."""
+        if self.current_read_url:
+            QApplication.clipboard().setText(self.current_read_url)
+            self.status_bar.showMessage("URL copied to clipboard", 3000)
+    
     def _delayed_nfc_init(self) -> None:
         """Initialize NFC reader connection after a delay (non-blocking)."""
         self.logger.info("Initializing NFC reader connection...")
-        self.reader_status_label.setText("Reader status: Connecting...")
-        self.reader_status_label.setStyleSheet("color: black;")
+        self._set_label(self.reader_status_label, "Reader status: Connecting...", role="muted")
         
         # Connect reader in a background thread to avoid blocking UI
         class InitConnectionThread(QThread):
@@ -350,8 +365,7 @@ class MainWindow(QMainWindow):
         """Handle record type change."""
         if record_type == "Text":
             self.url_input.setPlaceholderText("Enter text to write")
-            self.validation_label.setText("Text mode - any text is valid")
-            self.validation_label.setStyleSheet("color: blue;")
+            self._set_label(self.validation_label, "Text mode - any text is valid", role="info")
         else:
             self.url_input.setPlaceholderText("Enter URL or scan QR code")
             # Re-validate current input
@@ -394,17 +408,22 @@ class MainWindow(QMainWindow):
         if record_type == "Text":
             # Text mode - any non-empty text is valid
             if not text:
-                self.validation_label.setText("")
+                self._set_label(self.validation_label, "")
             else:
-                self.validation_label.setText(f"Text ({len(text)} characters)")
-                self.validation_label.setStyleSheet("color: blue;")
+                message = f"Text ({len(text)} characters)"
+                size = len(text.encode('utf-8'))
+                role = "info"
+                if self.tag_capacity and size + 7 > self.tag_capacity:
+                    message += f" - may not fit on this tag ({self.tag_capacity}-byte capacity)"
+                    role = "warning"
+                self._set_label(self.validation_label, message, role=role)
         else:
             # URL mode - validate URL
             normalized = self._normalize_url(text)
             self.url_valid = self._validate_url(normalized)
             
             if not text:
-                self.validation_label.setText("")
+                self._set_label(self.validation_label, "")
             elif self.url_valid:
                 # Check if it was converted from a LinkedIn username
                 import re
@@ -412,41 +431,24 @@ class MainWindow(QMainWindow):
                 is_linkedin_username = bool(re.match(linkedin_username_pattern, text.strip()) and len(text.strip()) > 1)
                 
                 if is_linkedin_username:
-                    self.validation_label.setText(f"LinkedIn profile: {normalized}")
+                    message = f"LinkedIn profile: {normalized}"
                 else:
-                    self.validation_label.setText("Valid URL")
-                self.validation_label.setStyleSheet("color: green;")
+                    message = "Valid URL"
+                
+                # Show size and warn if it may exceed the detected tag's capacity
+                # (+7 bytes approximates the NDEF record/TLV overhead)
+                size = len(normalized.encode('utf-8'))
+                message += f" \u00b7 {size} bytes"
+                role = "success"
+                if self.tag_capacity and size + 7 > self.tag_capacity:
+                    message += f" - may not fit on this tag ({self.tag_capacity}-byte capacity)"
+                    role = "warning"
+                self._set_label(self.validation_label, message, role=role)
             else:
-                self.validation_label.setText("Invalid URL")
-                self.validation_label.setStyleSheet("color: red;")
+                self._set_label(self.validation_label, "Invalid URL", role="error")
         
         # Update write button state
         self._update_write_button_state()
-    
-    def _on_scan_qr_clicked(self) -> None:
-        """Handle Scan QR button click."""
-        dialog = QRScanDialog(
-            self,
-            default_camera_index=self.settings.default_camera_index,
-            default_camera_name=self.settings.default_camera_name,
-            settings=self.settings
-        )
-        if dialog.exec():
-            decoded_url = dialog.get_decoded_url()
-            if decoded_url:
-                # Normalize and validate
-                normalized = self._normalize_url(decoded_url)
-                if self._validate_url(normalized):
-                    self.url_input.setText(normalized)
-                    self.status_bar.showMessage("QR code scanned successfully")
-                else:
-                    QMessageBox.warning(
-                        self,
-                        "Invalid URL",
-                        f"The QR code does not contain a valid URL:\n{decoded_url}"
-                    )
-            else:
-                QMessageBox.warning(self, "No URL", "No URL was decoded from the QR code.")
     
     def _on_write_clicked(self) -> None:
         """Handle Write to tag button click."""
@@ -480,8 +482,7 @@ class MainWindow(QMainWindow):
             self.write_progress.setVisible(True)
             self.write_progress.setRange(0, 0)  # Indeterminate
             # Set initial status
-            self.tag_status_label.setText("Tag status: Preparing write operation...")
-            self.tag_status_label.setStyleSheet("color: #007aff; font-weight: bold;")
+            self._set_label(self.tag_status_label, "Tag status: Preparing write operation...", role="info", bold=True)
             self.nfc_manager.write_url(record_type=record_type)  # No URL parameter - uses queue
         else:
             # Normal mode - use entered content
@@ -500,8 +501,7 @@ class MainWindow(QMainWindow):
             self.write_progress.setRange(0, 0)  # Indeterminate
             
             # Set initial status
-            self.tag_status_label.setText("Tag status: Preparing write operation...")
-            self.tag_status_label.setStyleSheet("color: #007aff; font-weight: bold;")
+            self._set_label(self.tag_status_label, "Tag status: Preparing write operation...", role="info", bold=True)
             
             # Write to tag
             self.nfc_manager.write_url(content, record_type=record_type)
@@ -646,7 +646,6 @@ class MainWindow(QMainWindow):
         self.start_camera_button.setEnabled(True)
         self.stop_camera_button.setEnabled(False)
         self.camera_preview_label.setText("Camera stopped")
-        self.camera_preview_label.setStyleSheet("background-color: black; color: white; border: 1px solid #ccc;")
         self.camera_status_label.setText("Camera stopped")
     
     @pyqtSlot(QImage)
@@ -676,7 +675,8 @@ class MainWindow(QMainWindow):
         normalized = self._normalize_url(data)
         self.url_input.setText(normalized)
         self.url_input.setFocus()
-        self.camera_status_label.setText(f"QR code scanned: {normalized[:50]}...")
+        display = normalized if len(normalized) <= 50 else normalized[:47] + "..."
+        self.camera_status_label.setText(f"QR code scanned: {display}")
         self.status_bar.showMessage("QR code scanned successfully", 3000)
     
     @pyqtSlot(str)
@@ -695,8 +695,7 @@ class MainWindow(QMainWindow):
     
     def _on_retry_reader_clicked(self) -> None:
         """Handle retry reader connection button click."""
-        self.reader_status_label.setText("Reader status: Checking...")
-        self.reader_status_label.setStyleSheet("color: black;")
+        self._set_label(self.reader_status_label, "Reader status: Checking...", role="muted")
         self.status_bar.showMessage("Attempting to connect to reader...")
         # Reconnect in a separate thread to avoid blocking UI
         class ConnectionThread(QThread):
@@ -718,8 +717,7 @@ class MainWindow(QMainWindow):
     def _on_reader_status_changed(self, status: str) -> None:
         """Handle NFC reader status change."""
         if status == "not found":
-            self.reader_status_label.setText("Reader status: Reader not found")
-            self.reader_status_label.setStyleSheet("color: red;")
+            self._set_label(self.reader_status_label, "Reader status: Reader not found", role="error")
             help_text = (
                 "Reader not found.\n\n"
                 "Troubleshooting:\n"
@@ -733,8 +731,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("Reader not found. Check troubleshooting steps above.")
             # Show a helpful tooltip or we could show a message box on first failure
         else:
-            self.reader_status_label.setText(f"Reader status: Reader connected: {status}")
-            self.reader_status_label.setStyleSheet("color: green;")
+            self._set_label(self.reader_status_label, f"Reader status: Reader connected: {status}", role="success")
             self.status_bar.showMessage("Reader connected")
     
     @pyqtSlot(str, dict)
@@ -743,11 +740,14 @@ class MainWindow(QMainWindow):
         self.tag_detected = True
         self.tag_type = tag_type
         
+        # Track tag capacity for URL size feedback
+        capacity = tag_info.get('capacity')
+        self.tag_capacity = capacity if isinstance(capacity, int) else None
+        
         # Handle MIFARE Classic with custom keys (locked)
         if tag_type == "mifare_classic_locked":
             message = tag_info.get('message', 'MIFARE Classic detected but requires custom keys')
-            self.tag_status_label.setText("Tag status: MIFARE Classic (locked with custom keys)")
-            self.tag_status_label.setStyleSheet("color: orange;")
+            self._set_label(self.tag_status_label, "Tag status: MIFARE Classic (locked with custom keys)", role="warning")
             self.write_button.setEnabled(False)
             self.status_bar.showMessage("MIFARE Classic detected but authentication failed. Tag uses custom keys.")
             return
@@ -772,11 +772,11 @@ class MainWindow(QMainWindow):
             elif tag_type == 'mifare_classic':
                 display_type = 'MIFARE Classic'
             
-            self.tag_status_label.setText(f"Tag status: {display_type} detected")
-            self.tag_status_label.setStyleSheet("color: green;")
+            self._set_label(self.tag_status_label, f"Tag status: {display_type} detected", role="success")
             
-            # Update write button state
+            # Update write button state and refresh URL validation with capacity info
             self._update_write_button_state()
+            self._on_url_changed(self.url_input.text())
             
             # Update status bar message
             if self.queue_mode_check.isChecked():
@@ -811,10 +811,10 @@ class MainWindow(QMainWindow):
             # Unsupported tag type
             message = tag_info.get('message', 'Unsupported tag type')
             if tag_type == "unsupported":
-                self.tag_status_label.setText(f"Tag status: Detected but not supported ({tag_info.get('type', 'unknown')})")
+                status_text = f"Tag status: Detected but not supported ({tag_info.get('type', 'unknown')})"
             else:
-                self.tag_status_label.setText(f"Tag status: Unsupported tag type ({tag_type})")
-            self.tag_status_label.setStyleSheet("color: orange;")
+                status_text = f"Tag status: Unsupported tag type ({tag_type})"
+            self._set_label(self.tag_status_label, status_text, role="warning")
             self.write_button.setEnabled(False)
             # Show helpful message
             if message and len(message) > 100:
@@ -829,8 +829,8 @@ class MainWindow(QMainWindow):
         self.logger.info("Tag removed signal received - updating UI")
         self.tag_detected = False
         self.tag_type = ""
-        self.tag_status_label.setText("Tag status: No tag detected")
-        self.tag_status_label.setStyleSheet("color: black;")
+        self.tag_capacity = None
+        self._set_label(self.tag_status_label, "Tag status: No tag detected", role="muted")
         self.write_button.setEnabled(False)
         self.read_tag_button.setEnabled(False)
         self.status_bar.showMessage("Tag removed")
@@ -840,14 +840,16 @@ class MainWindow(QMainWindow):
         self.tag_type_label.setText("-")
         self.tag_capacity_label.setText("-")
         self.tag_writable_label.setText("-")
-        self.read_url_label.setText("")
-        if hasattr(self, 'open_url_button'):
-            self.open_url_button.setEnabled(False)
-        if hasattr(self, 'current_read_url'):
-            self.current_read_url = None
+        self._set_label(self.read_url_label, "", role="muted", italic=True)
+        self.read_url_label.setToolTip("")
+        self.open_url_button.setEnabled(False)
+        self.copy_url_button.setEnabled(False)
+        self.current_read_url = None
+        
+        # Refresh URL validation (capacity info no longer applies)
+        self._on_url_changed(self.url_input.text())
         
         # Force UI update
-        from PyQt6.QtWidgets import QApplication
         QApplication.processEvents()
     
     def _update_tag_info_panel(self, tag_type: str, tag_info: dict) -> None:
@@ -880,9 +882,8 @@ class MainWindow(QMainWindow):
         # Writable (no prefix - title label handles it)
         writable = tag_info.get('writable', True)
         writable_text = "Yes" if writable else "No (Locked)"
-        writable_color = "green" if writable else "red"
-        self.tag_writable_label.setText(writable_text)
-        self.tag_writable_label.setStyleSheet(f"color: {writable_color};")
+        self._set_label(self.tag_writable_label, writable_text,
+                        role="success" if writable else "error")
         
         # Enable read button for NTAG tags
         if tag_type and tag_type.startswith('ntag'):
@@ -906,30 +907,27 @@ class MainWindow(QMainWindow):
             self.current_read_url = url
             # Truncate URL if too long to fit in fixed space
             display_url = url if len(url) <= 60 else url[:57] + "..."
-            self.read_url_label.setText(f"URL: {display_url}")
-            self.read_url_label.setStyleSheet("color: green;")
+            self._set_label(self.read_url_label, f"URL: {display_url}", role="success")
+            self.read_url_label.setToolTip(url)
             self.read_url_label.setWordWrap(True)
             # Ensure label stays at fixed height
             self.read_url_label.setMinimumHeight(50)
             self.read_url_label.setMaximumHeight(50)
-            # Enable open button if it's a valid URL
+            # Copy works for any content; open only for browsable URLs
+            self.copy_url_button.setEnabled(True)
             try:
                 parsed = urllib.parse.urlparse(url)
                 is_valid_url = parsed.scheme in ('http', 'https', 'ftp', 'file')
-                if hasattr(self, 'open_url_button'):
-                    self.open_url_button.setEnabled(is_valid_url)
-            except:
-                if hasattr(self, 'open_url_button'):
-                    self.open_url_button.setEnabled(False)
-            # Show full URL in status bar, truncated if too long
-            display_url = url if len(url) <= 60 else url[:57] + "..."
+                self.open_url_button.setEnabled(is_valid_url)
+            except Exception:
+                self.open_url_button.setEnabled(False)
             self.status_bar.showMessage(f"Tag read: {display_url}")
         else:
             self.current_read_url = None
-            self.read_url_label.setText("No URL/text found on tag")
-            self.read_url_label.setStyleSheet("color: #666; font-style: italic;")
-            if hasattr(self, 'open_url_button'):
-                self.open_url_button.setEnabled(False)
+            self._set_label(self.read_url_label, "No URL/text found on tag", role="muted", italic=True)
+            self.read_url_label.setToolTip("")
+            self.open_url_button.setEnabled(False)
+            self.copy_url_button.setEnabled(False)
             self.status_bar.showMessage("Tag read: No URL/text found")
     
     @pyqtSlot()
@@ -951,6 +949,8 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"✓ {message}", 5000)
         else:
             self.status_bar.showMessage(f"⚠ Verification failed: {message}", 10000)
+            if self.settings.notify_on_verify:
+                self._notify("Write verification failed", message)
     
     def _on_queue_mode_toggled(self, checked: bool) -> None:
         """Handle queue mode toggle."""
@@ -1091,25 +1091,20 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str)
     def _on_operation_status(self, status: str) -> None:
         """Handle operation status updates from NFC manager."""
-        # Make status more prominent during operations
-        self.tag_status_label.setText(f"Tag status: {status}")
-        
         # Style the label to indicate operation in progress
         if "Step" in status or "Preparing" in status or "Clearing" in status or "Writing" in status or "Verifying" in status:
             # Show in-progress styling
-            self.tag_status_label.setStyleSheet("color: #007aff; font-weight: bold;")
+            self._set_label(self.tag_status_label, f"Tag status: {status}", role="info", bold=True)
             # Update status bar as well
             self.status_bar.showMessage(status, 0)  # 0 = permanent until changed
         elif "complete" in status.lower():
             # Show success styling briefly
-            self.tag_status_label.setStyleSheet("color: #34c759; font-weight: bold;")
+            self._set_label(self.tag_status_label, f"Tag status: {status}", role="success", bold=True)
             self.status_bar.showMessage(status, 3000)  # Show for 3 seconds
         else:
             # Default styling
-            if self.tag_detected:
-                self.tag_status_label.setStyleSheet("color: green;")
-            else:
-                self.tag_status_label.setStyleSheet("color: black;")
+            self._set_label(self.tag_status_label, f"Tag status: {status}",
+                            role="success" if self.tag_detected else "muted")
     
     @pyqtSlot()
     def _on_write_success(self) -> None:
@@ -1119,27 +1114,26 @@ class MainWindow(QMainWindow):
         
         # Reset status to ready after a brief delay to show completion
         if self.tag_detected:
-            self.tag_status_label.setText("Tag status: Ready to write")
-            self.tag_status_label.setStyleSheet("color: green;")
+            self._set_label(self.tag_status_label, "Tag status: Ready to write", role="success")
         else:
-            self.tag_status_label.setText("Tag status: No tag detected")
-            self.tag_status_label.setStyleSheet("color: black;")
+            self._set_label(self.tag_status_label, "Tag status: No tag detected", role="muted")
         
         # Update queue display if in queue mode
+        written_url = None
         if self.queue_mode_check.isChecked():
             self._update_queue_display()
-            # Get the URL that was written (from queue)
+            # The queue is processed in order, so the most recently written
+            # URL is the *last* completed item
             queue = self.nfc_manager.get_batch_queue()
-            written_url = None
             for item in queue:
-                if item['status'] == 'completed' and written_url is None:
-                    # Find the most recently completed
+                if item['status'] == 'completed':
                     written_url = item['url']
             if written_url:
                 self.settings.add_recent_url(written_url)
         else:
             # Normal mode - save entered URL
             normalized_url = self._normalize_url(self.current_url)
+            written_url = normalized_url
             self.settings.set_last_written_url(normalized_url)
             self.settings.add_recent_url(normalized_url)
             # Clear URL input and current_url only if setting is enabled
@@ -1194,6 +1188,10 @@ class MainWindow(QMainWindow):
         # Update status
         self.status_bar.showMessage("Write successful. Ready for next card.")
         
+        # System notification (if enabled in preferences)
+        if self.settings.notify_on_success:
+            self._notify("Write successful", written_url or "Content written to tag")
+        
         # Auto-read tag after write if setting is enabled
         if self.tag_detected and getattr(self.settings, 'auto_read_after_write', True):
             # Delay to ensure write is complete and tag is stable
@@ -1228,11 +1226,9 @@ class MainWindow(QMainWindow):
         
         # Reset status
         if self.tag_detected:
-            self.tag_status_label.setText("Tag status: Ready to write")
-            self.tag_status_label.setStyleSheet("color: green;")
+            self._set_label(self.tag_status_label, "Tag status: Ready to write", role="success")
         else:
-            self.tag_status_label.setText("Tag status: No tag detected")
-            self.tag_status_label.setStyleSheet("color: black;")
+            self._set_label(self.tag_status_label, "Tag status: No tag detected", role="muted")
         
         # Update status bar
         self.status_bar.showMessage("Write failed. Please try again.", 5000)
@@ -1259,15 +1255,25 @@ class MainWindow(QMainWindow):
     
     def _update_recent_urls_combo(self) -> None:
         """Update the recent URLs dropdown."""
+        # Block signals while repopulating so placeholder items don't
+        # trigger the selection handler
+        self.recent_urls_combo.blockSignals(True)
         self.recent_urls_combo.clear()
         recent_urls = self.settings.get_recent_urls()
         if recent_urls:
-            self.recent_urls_combo.addItems(recent_urls)
-            self.recent_urls_combo.insertItem(0, "-- Select a recent URL --")
+            self.recent_urls_combo.addItem("-- Select a recent URL --")
+            for i, url in enumerate(recent_urls, start=1):
+                self.recent_urls_combo.addItem(url)
+                # Long URLs get cut off by the combo width; show full URL on hover
+                self.recent_urls_combo.setItemData(i, url, Qt.ItemDataRole.ToolTipRole)
             self.recent_urls_combo.setCurrentIndex(0)
+            self.recent_urls_combo.setEnabled(True)
+            self.clear_history_button.setEnabled(True)
         else:
             self.recent_urls_combo.addItem("(No recent URLs)")
             self.recent_urls_combo.setEnabled(False)
+            self.clear_history_button.setEnabled(False)
+        self.recent_urls_combo.blockSignals(False)
     
     def _on_recent_url_selected(self, text: str) -> None:
         """Handle recent URL selection from dropdown."""
@@ -1297,506 +1303,23 @@ class MainWindow(QMainWindow):
             # Theme may have changed, reapply it
             self._apply_theme()
     
-    def _apply_modern_style(self) -> str:
-        """Apply modern professional styling to the application."""
-        return """
-            /* Main Window */
-            QMainWindow {
-                background-color: #f5f5f7;
-            }
-            
-            /* Group Boxes - Modern card style */
-            QGroupBox {
-                font-weight: 600;
-                font-size: 13px;
-                color: #1d1d1f;
-                border: none;
-                border-radius: 12px;
-                background-color: #ffffff;
-                margin-top: 8px;
-                padding-top: 16px;
-                padding: 12px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 16px;
-                padding: 0 8px;
-                color: #1d1d1f;
-                font-weight: 600;
-            }
-            
-            /* Input Fields - Modern style */
-            QLineEdit {
-                background-color: #f5f5f7;
-                border: 2px solid #e5e5e7;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-size: 14px;
-                color: #1d1d1f;
-                selection-background-color: #007aff;
-                selection-color: white;
-            }
-            QLineEdit:focus {
-                border: 2px solid #007aff;
-                background-color: #ffffff;
-            }
-            QLineEdit:hover {
-                border: 2px solid #d1d1d6;
-            }
-            
-            /* Combo Boxes - Modern dropdown */
-            QComboBox {
-                background-color: #f5f5f7;
-                border: 2px solid #e5e5e7;
-                border-radius: 8px;
-                padding: 6px 12px;
-                font-size: 14px;
-                color: #1d1d1f;
-                min-height: 28px;
-            }
-            QComboBox:hover {
-                border: 2px solid #d1d1d6;
-            }
-            QComboBox:focus {
-                border: 2px solid #007aff;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 30px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid #1d1d1f;
-                margin-right: 10px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #ffffff;
-                border: 1px solid #e5e5e7;
-                border-radius: 8px;
-                selection-background-color: #007aff;
-                selection-color: white;
-                padding: 4px;
-            }
-            
-            /* Buttons - Modern iOS/macOS style */
-            QPushButton {
-                background-color: #007aff;
-                color: #ffffff;
-                border: none;
-                border-radius: 8px;
-                padding: 6px 16px;
-                font-size: 14px;
-                font-weight: 500;
-                min-height: 32px;
-            }
-            QPushButton:hover {
-                background-color: #0051d5;
-            }
-            QPushButton:pressed {
-                background-color: #0040a8;
-            }
-            QPushButton:disabled {
-                background-color: #e5e5e7;
-                color: #8e8e93;
-            }
-            
-            /* Secondary buttons */
-            QPushButton[class="secondary"] {
-                background-color: #f5f5f7;
-                color: #007aff;
-                border: 2px solid #007aff;
-            }
-            QPushButton[class="secondary"]:hover {
-                background-color: #e8f2ff;
-            }
-            QPushButton[class="secondary"]:pressed {
-                background-color: #d1e7ff;
-            }
-            
-            /* Labels */
-            QLabel {
-                color: #1d1d1f;
-                font-size: 14px;
-            }
-            
-            /* Status Bar */
-            QStatusBar {
-                background-color: #ffffff;
-                border-top: 1px solid #e5e5e7;
-                color: #6e6e73;
-                font-size: 12px;
-            }
-            
-            /* Progress Bar */
-            QProgressBar {
-                border: none;
-                border-radius: 4px;
-                background-color: #e5e5e7;
-                text-align: center;
-                color: #1d1d1f;
-                font-size: 12px;
-                height: 6px;
-            }
-            QProgressBar::chunk {
-                background-color: #007aff;
-                border-radius: 4px;
-            }
-            
-            /* List Widget */
-            QListWidget {
-                background-color: #f5f5f7;
-                border: 2px solid #e5e5e7;
-                border-radius: 8px;
-                padding: 4px;
-                font-size: 14px;
-                color: #1d1d1f;
-            }
-            QListWidget::item {
-                padding: 8px;
-                border-radius: 6px;
-            }
-            QListWidget::item:selected {
-                background-color: #007aff;
-                color: white;
-            }
-            QListWidget::item:hover {
-                background-color: #e8f2ff;
-            }
-            
-            /* Checkbox */
-            QCheckBox {
-                font-size: 14px;
-                color: #1d1d1f;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-                border: 2px solid #d1d1d6;
-                border-radius: 4px;
-                background-color: #ffffff;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #007aff;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #007aff;
-                border: 2px solid #007aff;
-                image: none;
-            }
-            QCheckBox::indicator:checked::after {
-                content: "✓";
-                color: white;
-                font-weight: bold;
-            }
-            
-            /* Menu Bar */
-            QMenuBar {
-                background-color: #ffffff;
-                border-bottom: 1px solid #e5e5e7;
-                color: #1d1d1f;
-                font-size: 13px;
-                padding: 4px;
-            }
-            QMenuBar::item {
-                padding: 6px 12px;
-                border-radius: 6px;
-            }
-            QMenuBar::item:selected {
-                background-color: #f5f5f7;
-            }
-            QMenu {
-                background-color: #ffffff;
-                border: 1px solid #e5e5e7;
-                border-radius: 8px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 24px;
-                border-radius: 6px;
-            }
-            QMenu::item:selected {
-                background-color: #007aff;
-                color: white;
-            }
-            
-            /* Camera Preview */
-            QLabel[class="camera-preview"] {
-                border: 2px solid #e5e5e7;
-                border-radius: 12px;
-                background-color: #000000;
-            }
-        """
-    
     def _apply_theme(self) -> None:
-        """Apply dark/light theme based on settings."""
-        dark_mode = self.settings.dark_mode
+        """Apply the light/dark theme from settings (or system auto-detect)."""
+        self._dark = theme.resolve_dark_mode(self.settings.dark_mode, self)
+        self.colors = theme.colors(self._dark)
+        self.setStyleSheet(theme.build_stylesheet(self._dark))
         
-        # Auto-detect if None
-        if dark_mode is None:
-            # Check system theme
-            palette = self.palette()
-            bg_color = palette.color(palette.ColorRole.Window)
-            # If background is dark, use dark mode
-            dark_mode = bg_color.lightness() < 128
+        # Widget-specific styles that depend on theme colors
+        self._reset_success_indicator()
+        muted_title = f"font-size: 11px; color: {self.colors['muted']};"
+        self.uid_label_title.setStyleSheet(muted_title)
+        self.type_label_title.setStyleSheet(muted_title)
+        self.capacity_label_title.setStyleSheet(muted_title)
+        self.writable_label_title.setStyleSheet(muted_title)
         
-        if dark_mode:
-            # Dark theme stylesheet - modern dark mode
-            self.setStyleSheet("""
-                /* Main Window */
-                QMainWindow {
-                    background-color: #1c1c1e;
-                }
-                
-                /* Scroll Area */
-                QScrollArea {
-                    background-color: #1c1c1e;
-                    border: none;
-                }
-                QScrollBar:vertical {
-                    background-color: #2c2c2e;
-                    width: 12px;
-                    border: none;
-                }
-                QScrollBar::handle:vertical {
-                    background-color: #48484a;
-                    border-radius: 6px;
-                    min-height: 30px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background-color: #5a5a5c;
-                }
-                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                    height: 0px;
-                }
-                
-                /* Group Boxes */
-                QGroupBox {
-                    font-weight: 600;
-                    font-size: 13px;
-                    color: #ffffff;
-                    border: none;
-                    border-radius: 12px;
-                    background-color: #2c2c2e;
-                    margin-top: 8px;
-                    padding-top: 16px;
-                    padding: 12px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    left: 16px;
-                    padding: 0 8px;
-                    color: #ffffff;
-                    font-weight: 600;
-                }
-                
-                /* Input Fields */
-                QLineEdit {
-                    background-color: #1c1c1e;
-                    border: 2px solid #38383a;
-                    border-radius: 8px;
-                    padding: 8px 12px;
-                    font-size: 14px;
-                    color: #ffffff;
-                    selection-background-color: #0a84ff;
-                    selection-color: white;
-                }
-                QLineEdit:focus {
-                    border: 2px solid #0a84ff;
-                    background-color: #2c2c2e;
-                }
-                QLineEdit:hover {
-                    border: 2px solid #48484a;
-                }
-                
-                /* Combo Boxes */
-                QComboBox {
-                    background-color: #1c1c1e;
-                    border: 2px solid #38383a;
-                    border-radius: 8px;
-                    padding: 6px 12px;
-                    font-size: 14px;
-                    color: #ffffff;
-                    min-height: 28px;
-                }
-                QComboBox:hover {
-                    border: 2px solid #48484a;
-                }
-                QComboBox:focus {
-                    border: 2px solid #0a84ff;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                    width: 30px;
-                }
-                QComboBox::down-arrow {
-                    image: none;
-                    border-left: 5px solid transparent;
-                    border-right: 5px solid transparent;
-                    border-top: 6px solid #ffffff;
-                    margin-right: 10px;
-                }
-                QComboBox QAbstractItemView {
-                    background-color: #2c2c2e;
-                    border: 1px solid #38383a;
-                    border-radius: 8px;
-                    selection-background-color: #0a84ff;
-                    selection-color: white;
-                    padding: 4px;
-                }
-                
-                /* Buttons */
-                QPushButton {
-                    background-color: #0a84ff;
-                    color: #ffffff;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 6px 16px;
-                    font-size: 14px;
-                    font-weight: 500;
-                    min-height: 32px;
-                }
-                QPushButton:hover {
-                    background-color: #0051d5;
-                }
-                QPushButton:pressed {
-                    background-color: #0040a8;
-                }
-                QPushButton:disabled {
-                    background-color: #38383a;
-                    color: #8e8e93;
-                }
-                
-                /* Labels */
-                QLabel {
-                    color: #ffffff;
-                    font-size: 14px;
-                }
-                
-                /* Status Bar */
-                QStatusBar {
-                    background-color: #1c1c1e;
-                    border-top: 1px solid #38383a;
-                    color: #8e8e93;
-                    font-size: 12px;
-                }
-                
-                /* Progress Bar */
-                QProgressBar {
-                    border: none;
-                    border-radius: 4px;
-                    background-color: #38383a;
-                    text-align: center;
-                    color: #ffffff;
-                    font-size: 12px;
-                    height: 6px;
-                }
-                QProgressBar::chunk {
-                    background-color: #0a84ff;
-                    border-radius: 4px;
-                }
-                
-                /* List Widget */
-                QListWidget {
-                    background-color: #1c1c1e;
-                    border: 2px solid #38383a;
-                    border-radius: 8px;
-                    padding: 4px;
-                    font-size: 14px;
-                    color: #ffffff;
-                }
-                QListWidget::item {
-                    padding: 8px;
-                    border-radius: 6px;
-                }
-                QListWidget::item:selected {
-                    background-color: #0a84ff;
-                    color: white;
-                }
-                QListWidget::item:hover {
-                    background-color: #2c2c2e;
-                }
-                
-                /* Checkbox */
-                QCheckBox {
-                    font-size: 14px;
-                    color: #ffffff;
-                    spacing: 8px;
-                }
-                QCheckBox::indicator {
-                    width: 20px;
-                    height: 20px;
-                    border: 2px solid #48484a;
-                    border-radius: 4px;
-                    background-color: #1c1c1e;
-                }
-                QCheckBox::indicator:hover {
-                    border: 2px solid #0a84ff;
-                }
-                QCheckBox::indicator:checked {
-                    background-color: #0a84ff;
-                    border: 2px solid #0a84ff;
-                }
-                
-                /* Menu Bar */
-                QMenuBar {
-                    background-color: #2c2c2e;
-                    border-bottom: 1px solid #38383a;
-                    color: #ffffff;
-                    font-size: 13px;
-                    padding: 4px;
-                }
-                QMenuBar::item {
-                    padding: 6px 12px;
-                    border-radius: 6px;
-                }
-                QMenuBar::item:selected {
-                    background-color: #38383a;
-                }
-                QMenu {
-                    background-color: #2c2c2e;
-                    border: 1px solid #38383a;
-                    border-radius: 8px;
-                    padding: 4px;
-                }
-                QMenu::item {
-                    padding: 8px 24px;
-                    border-radius: 6px;
-                }
-                QMenu::item:selected {
-                    background-color: #0a84ff;
-                    color: white;
-                }
-            """)
-        else:
-            # Light theme - apply modern style with scroll area
-            base_style = self._apply_modern_style()
-            scroll_style = """
-                /* Scroll Area */
-                QScrollArea {
-                    background-color: #f5f5f7;
-                    border: none;
-                }
-                QScrollBar:vertical {
-                    background-color: #e5e5e7;
-                    width: 12px;
-                    border: none;
-                }
-                QScrollBar::handle:vertical {
-                    background-color: #d1d1d6;
-                    border-radius: 6px;
-                    min-height: 30px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background-color: #b8b8bc;
-                }
-                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                    height: 0px;
-                }
-            """
-            self.setStyleSheet(base_style + scroll_style)
+        # Re-apply semantic colors on all tracked status labels
+        for label, (text, role, bold, italic) in self._label_states.items():
+            self._style_label(label, role, bold, italic)
     
     def _on_import_urls(self) -> None:
         """Handle Import URLs menu item."""
@@ -1870,20 +1393,22 @@ class MainWindow(QMainWindow):
     def _show_success_indicator(self) -> None:
         """Show visual success feedback."""
         # Change status panel background to green
-        self.status_panel.setStyleSheet("background-color: #90EE90; border: 2px solid #00AA00;")
+        self.status_panel.setStyleSheet(
+            f"background-color: {self.colors['success_bg']};"
+            f"border: 2px solid {self.colors['success_border']};"
+            "border-radius: 8px;"
+        )
         
         # Reset after 2 seconds
         self.success_timer.start(2000)
     
     def _reset_success_indicator(self) -> None:
         """Reset success indicator to normal state."""
-        self.status_panel.setStyleSheet("""
-            QWidget {
-                background-color: #f5f5f7;
-                border: 2px solid #e5e5e7;
-                border-radius: 8px;
-            }
-        """)
+        self.status_panel.setStyleSheet(
+            f"background-color: {self.colors['field']};"
+            f"border: 2px solid {self.colors['border']};"
+            "border-radius: 8px;"
+        )
     
     def closeEvent(self, event) -> None:
         """Handle window close event."""

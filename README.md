@@ -460,10 +460,14 @@ NFC_URL_Writer_pyapp/
 │       ├── __init__.py
 │       ├── main_window.py      # Main application window
 │       ├── main_window.ui      # Qt Designer UI file
+│       ├── theme.py            # Central light/dark palettes and stylesheet
 │       ├── settings_dialog.py  # Settings dialog
 │       ├── settings_dialog.ui  # Qt Designer UI file
 │       ├── qr_dialog.py        # QR scanning dialog
 │       └── qr_dialog.ui        # Qt Designer UI file
+├── app_entry.py                # PyInstaller entry point
+├── nfc_url_writer.spec         # PyInstaller build spec
+├── build_app.sh                # Standalone app build script
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md
