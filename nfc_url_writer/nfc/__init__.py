@@ -1,0 +1,2 @@
+"""NFC communication module."""
+

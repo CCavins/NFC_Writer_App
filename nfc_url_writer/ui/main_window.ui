@@ -1,0 +1,1037 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1400</width>
+    <height>900</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>1200</width>
+    <height>800</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>NFC URL Writer</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="main_layout">
+    <property name="spacing">
+     <number>12</number>
+    </property>
+    <property name="leftMargin">
+     <number>12</number>
+    </property>
+    <property name="topMargin">
+     <number>12</number>
+    </property>
+    <property name="rightMargin">
+     <number>12</number>
+    </property>
+    <property name="bottomMargin">
+     <number>12</number>
+    </property>
+    <item>
+     <widget class="QWidget" name="left_panel_container">
+      <property name="minimumSize">
+       <size>
+        <width>500</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>600</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="left_container_layout">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QScrollArea" name="left_scroll">
+         <property name="widgetResizable">
+          <bool>true</bool>
+         </property>
+         <property name="horizontalScrollBarPolicy">
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+         </property>
+         <property name="verticalScrollBarPolicy">
+          <enum>Qt::ScrollBarPolicy::ScrollBarAsNeeded</enum>
+         </property>
+         <widget class="QWidget" name="left_panel">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>0</y>
+            <width>580</width>
+            <height>860</height>
+           </rect>
+          </property>
+          <layout class="QVBoxLayout" name="left_layout">
+           <property name="spacing">
+            <number>10</number>
+           </property>
+           <item>
+            <widget class="QGroupBox" name="url_group">
+             <property name="title">
+              <string>Content to write</string>
+             </property>
+             <property name="minimumHeight">
+              <number>200</number>
+             </property>
+             <layout class="QVBoxLayout" name="url_layout">
+              <property name="spacing">
+               <number>8</number>
+              </property>
+              <property name="leftMargin">
+               <number>12</number>
+              </property>
+              <property name="topMargin">
+               <number>12</number>
+              </property>
+              <property name="rightMargin">
+               <number>12</number>
+              </property>
+              <property name="bottomMargin">
+               <number>12</number>
+              </property>
+              <item>
+               <layout class="QHBoxLayout" name="record_type_layout">
+                <property name="spacing">
+                 <number>8</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="record_type_label">
+                  <property name="minimumSize">
+                   <size>
+                    <width>100</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Record type:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="record_type_combo">
+                  <property name="minimumSize">
+                   <size>
+                    <width>100</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="record_type_spacer">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QLineEdit" name="url_input">
+                <property name="minimumHeight">
+                 <number>36</number>
+                </property>
+                <property name="placeholderText">
+                 <string>Enter URL or scan QR code</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="validation_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="recent_layout">
+                <property name="spacing">
+                 <number>8</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="recent_label">
+                  <property name="minimumSize">
+                   <size>
+                    <width>100</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Recent URLs:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="recent_urls_combo">
+                  <property name="minimumWidth">
+                   <number>200</number>
+                  </property>
+                  <property name="editable">
+                   <bool>false</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="clear_history_button">
+                  <property name="minimumSize">
+                   <size>
+                    <width>70</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>70</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Clear</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+             <layout class="QHBoxLayout" name="button_layout">
+              <property name="spacing">
+               <number>6</number>
+              </property>
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+             <item>
+              <widget class="QPushButton" name="write_button">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>110</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Write to tag</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="retry_button">
+               <property name="minimumSize">
+                <size>
+                 <width>130</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Retry previous URL</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="button_spacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="status_group">
+             <property name="title">
+              <string>Status</string>
+             </property>
+             <property name="minimumHeight">
+              <number>180</number>
+             </property>
+             <layout class="QVBoxLayout" name="status_layout">
+              <property name="spacing">
+               <number>8</number>
+              </property>
+              <property name="leftMargin">
+               <number>12</number>
+              </property>
+              <property name="topMargin">
+               <number>12</number>
+              </property>
+              <property name="rightMargin">
+               <number>12</number>
+              </property>
+              <property name="bottomMargin">
+               <number>12</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="reader_status_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string>Reader status: Checking...</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="retry_reader_button">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>26</height>
+                 </size>
+                </property>
+                <property name="maximumHeight">
+                 <number>26</number>
+                </property>
+                <property name="text">
+                 <string>Retry Connection</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="tag_status_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string>Tag status: No tag detected</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QWidget" name="status_panel">
+                <property name="minimumSize">
+                 <size>
+                  <width>200</width>
+                  <height>80</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QProgressBar" name="write_progress">
+             <property name="visible">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="queue_group">
+             <property name="title">
+              <string>Batch Queue</string>
+             </property>
+             <property name="visible">
+              <bool>false</bool>
+             </property>
+             <property name="minimumHeight">
+              <number>250</number>
+             </property>
+             <layout class="QVBoxLayout" name="queue_layout">
+              <property name="spacing">
+               <number>8</number>
+              </property>
+              <property name="leftMargin">
+               <number>12</number>
+              </property>
+              <property name="topMargin">
+               <number>12</number>
+              </property>
+              <property name="rightMargin">
+               <number>12</number>
+              </property>
+              <property name="bottomMargin">
+               <number>12</number>
+              </property>
+              <item>
+               <layout class="QHBoxLayout" name="queue_mode_layout">
+                <property name="spacing">
+                 <number>8</number>
+                </property>
+                <item>
+                 <widget class="QCheckBox" name="queue_mode_check">
+                  <property name="minimumHeight">
+                   <number>28</number>
+                  </property>
+                  <property name="text">
+                   <string>Queue Mode</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="queue_mode_spacer">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="queue_controls_layout">
+                <property name="spacing">
+                 <number>8</number>
+                </property>
+                <item>
+                 <widget class="QPushButton" name="import_queue_button">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>110</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Import Queue</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="clear_queue_button">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>110</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Clear Queue</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="reset_progress_button">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>120</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Reset Progress</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="queue_controls_spacer">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QListWidget" name="queue_list">
+                <property name="minimumHeight">
+                 <number>120</number>
+                </property>
+                <property name="maximumHeight">
+                 <number>150</number>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="queue_progress_layout">
+                <property name="spacing">
+                 <number>8</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="queue_progress_label">
+                  <property name="minimumSize">
+                   <size>
+                    <width>100</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Progress: 0/0</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QProgressBar" name="queue_progress_bar">
+                  <property name="minimumHeight">
+                   <number>24</number>
+                  </property>
+                  <property name="maximum">
+                   <number>100</number>
+                  </property>
+                  <property name="value">
+                   <number>0</number>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="right_panel">
+      <layout class="QVBoxLayout" name="right_layout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QGroupBox" name="camera_group">
+         <property name="title">
+          <string>QR Code Scanner</string>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <layout class="QVBoxLayout" name="camera_layout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <item>
+           <layout class="QHBoxLayout" name="camera_select_layout">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="camera_label">
+              <property name="minimumSize">
+               <size>
+                <width>80</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>80</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Camera:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="camera_combo">
+              <property name="minimumSize">
+               <size>
+                <width>200</width>
+                <height>36</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="camera_preview_label">
+            <property name="minimumSize">
+             <size>
+              <width>320</width>
+              <height>240</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Camera not started</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
+            </property>
+            <property name="scaledContents">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="camera_controls_layout">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <item>
+             <widget class="QPushButton" name="start_camera_button">
+              <property name="minimumSize">
+               <size>
+                <width>110</width>
+                <height>32</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Start Camera</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="stop_camera_button">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>110</width>
+                <height>32</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Stop Camera</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="camera_controls_spacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="camera_status_label">
+            <property name="minimumHeight">
+             <number>20</number>
+            </property>
+            <property name="maximumHeight">
+             <number>20</number>
+            </property>
+            <property name="text">
+             <string>Click 'Start Camera' to begin scanning QR codes</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="tag_info_group">
+         <property name="title">
+          <string>Tag Information</string>
+         </property>
+         <property name="minimumHeight">
+          <number>220</number>
+         </property>
+         <property name="maximumHeight">
+          <number>220</number>
+         </property>
+         <layout class="QVBoxLayout" name="tag_info_layout">
+          <property name="spacing">
+           <number>6</number>
+          </property>
+          <property name="leftMargin">
+           <number>10</number>
+          </property>
+          <property name="topMargin">
+           <number>10</number>
+          </property>
+          <property name="rightMargin">
+           <number>10</number>
+          </property>
+          <property name="bottomMargin">
+           <number>10</number>
+          </property>
+          <item>
+           <layout class="QHBoxLayout" name="top_row">
+            <property name="spacing">
+             <number>12</number>
+            </property>
+            <item>
+             <layout class="QVBoxLayout" name="uid_container">
+              <property name="spacing">
+               <number>4</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="uid_label_title">
+                <property name="text">
+                 <string>UID:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="tag_uid_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="maximumHeight">
+                 <number>20</number>
+                </property>
+                <property name="text">
+                 <string>-</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="type_container">
+              <property name="spacing">
+               <number>4</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="type_label_title">
+                <property name="text">
+                 <string>Type:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="tag_type_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="maximumHeight">
+                 <number>20</number>
+                </property>
+                <property name="text">
+                 <string>-</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="top_row_spacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="middle_row">
+            <property name="spacing">
+             <number>12</number>
+            </property>
+            <item>
+             <layout class="QVBoxLayout" name="capacity_container">
+              <property name="spacing">
+               <number>4</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="capacity_label_title">
+                <property name="text">
+                 <string>Capacity:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="tag_capacity_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="maximumHeight">
+                 <number>20</number>
+                </property>
+                <property name="text">
+                 <string>-</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="writable_container">
+              <property name="spacing">
+               <number>4</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="writable_label_title">
+                <property name="text">
+                 <string>Writable:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="tag_writable_label">
+                <property name="minimumHeight">
+                 <number>20</number>
+                </property>
+                <property name="maximumHeight">
+                 <number>20</number>
+                </property>
+                <property name="text">
+                 <string>-</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="middle_row_spacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="tag_info_spacer1">
+            <property name="orientation">
+             <enum>Qt::Orientation::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>6</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="read_button_layout">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <item>
+             <widget class="QPushButton" name="read_tag_button">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="minimumWidth">
+               <number>120</number>
+              </property>
+              <property name="text">
+               <string>Read Tag</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="read_button_spacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="tag_info_spacer2">
+            <property name="orientation">
+             <enum>Qt::Orientation::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>4</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="read_url_layout">
+            <property name="spacing">
+             <number>6</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="read_url_label">
+              <property name="minimumHeight">
+               <number>50</number>
+              </property>
+              <property name="maximumHeight">
+               <number>50</number>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="button_row">
+              <property name="spacing">
+               <number>8</number>
+              </property>
+              <item>
+               <spacer name="button_row_spacer">
+                <property name="orientation">
+                 <enum>Qt::Orientation::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="open_url_button">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>130</width>
+                  <height>36</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Open in Browser</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+  </layout>
+ </widget>
+ <widget class="QStatusBar" name="status_bar"/>
+</widget>
+ <resources/>
+ <connections/>
+</ui>
+

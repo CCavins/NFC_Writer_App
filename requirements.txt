@@ -1,0 +1,6 @@
+PyQt6>=6.4.0
+nfctagger>=0.0.2  # ACR122U-specific library for NTAG tags, works with PC/SC running
+pyscard>=2.0.0  # For MIFARE Ultralight and other tag support
+opencv-python>=4.7.0
+pyzbar>=0.1.9
+
