@@ -7,6 +7,7 @@ A cross-platform desktop application for writing URLs to NFC tags using an ACR12
 ### Core Functionality
 - **Manual URL Entry**: Type or paste URLs with automatic validation and HTTPS prefixing
 - **QR Code Scanning**: Scan QR codes from your webcam to populate the URL field
+- **Accurate Camera Selection (macOS)**: Cameras are enumerated via AVFoundation using the same device ordering OpenCV uses, so the camera you pick is always the one that opens. iPhone Continuity Cameras and Desk View are detected by device type/model and never listed or activated
 - **NFC Tag Writing**: Write URLs to NTAG213, NTAG215, NTAG216, MIFARE Ultralight, and MIFARE Classic tags
 - **Tag Detection**: Real-time detection and identification of NFC tags with automatic reading
 - **Tag Reading**: Read URLs/text from tags and display them in the GUI
@@ -25,6 +26,7 @@ A cross-platform desktop application for writing URLs to NFC tags using an ACR12
 - **Clear URL after Write**: Automatically clear URL input field after successful write (configurable)
 
 ### User Interface Features
+- **Modern Design**: Card-based layout with Inter typography and a vixi-inspired color system (bundled font, consistent 8px radii and spacing)
 - **Dark/Light Theme**: System-aware theme with manual override option
 - **Real-time Status Updates**: Visual feedback during write operations with step-by-step progress
 - **Tag Information Display**: Shows tag type, UID, capacity, and writable status
@@ -48,7 +50,7 @@ A cross-platform desktop application for writing URLs to NFC tags using an ACR12
   - ACR122U driver from ACS
 
 ### Python Requirements
-- Python 3.10 or newer
+- Python 3.9 or newer
 - All Python dependencies are listed in `requirements.txt`
 
 ## Setup for Development
@@ -117,34 +119,31 @@ python -c "from smartcard.System import readers; print(readers())"
 
 ## Running the Application
 
-### Quick Launch (Recommended)
+### Standalone App (Recommended)
 
-**Double-click `launch_app.command`** in Finder - this is the easiest way to launch the app!
+Build the fully self-contained app once, then use it like any other Mac app:
 
-### Other Options
+```bash
+./build_app.sh
+```
 
-**Option 1: Use the launcher script:**
+This produces `dist/NFC URL Writer.app` — drag it to `/Applications`, add it to the Dock, launch from Spotlight. No Python or Homebrew needed on the machine that runs it. See [Building a Standalone App](#building-a-standalone-app-pyinstaller) below for details.
+
+### Development Options
+
+**Option 1: Double-click `launch_app.command`** in Finder (runs from the venv)
+
+**Option 2: Use the launcher script:**
 
 ```bash
 ./run.sh
 ```
 
-**Option 2: Run directly:**
+**Option 3: Run directly:**
 
 ```bash
 python -m nfc_url_writer.main
 ```
-
-**Option 3: Create macOS App Bundle:**
-
-```bash
-./create_app_bundle.sh
-```
-
-This creates `NFC URL Writer.app` which you can:
-- Double-click to launch
-- Drag to Applications folder
-- Launch from Spotlight (Cmd+Space)
 
 **Note for macOS users:** If you get "Unable to find zbar shared library" errors, you need to set the library path:
 
@@ -188,7 +187,7 @@ The main window uses a **two-panel horizontal layout**:
 #### Left Panel (Scrollable)
 - **Width**: 500-600px (fixed width container)
 - **Layout**: Vertical scrollable area containing multiple group boxes
-- **Spacing**: 10px between group boxes
+- **Spacing**: 12px between group boxes
 
 **Group Boxes (in order):**
 
@@ -216,13 +215,13 @@ The main window uses a **two-panel horizontal layout**:
 
 #### Right Panel (Fixed)
 - **Layout**: Vertical layout with group boxes
-- **Spacing**: 10px between group boxes
+- **Spacing**: 12px between group boxes
 
 **Group Boxes (in order):**
 
 1. **Camera Group** (`camera_group`)
    - Camera selection dropdown
-   - Camera preview label (320x240 minimum)
+   - Camera preview label (320x160 minimum, expands to fill; `Ignored` size policy plus a stretch factor so the video frame can never push the buttons out of place)
    - Start/Stop camera buttons
 
 2. **Tag Information Group** (`tag_info_group`)
@@ -231,7 +230,7 @@ The main window uses a **two-panel horizontal layout**:
    - Capacity display
    - Writable status display
    - Read URL label (shows URL from tag)
-   - Open in Browser button (enabled when valid URL is read)
+   - Copy and Open in Browser buttons (enabled when valid URL is read)
 
 ### Preferences/Settings Dialog Structure
 
@@ -356,7 +355,7 @@ This produces `dist/NFC URL Writer.app`. Drag it to `/Applications` and double-c
 
 The spec handles the packaging details automatically:
 - Bundles the zbar library for QR decoding (with a runtime hook so pyzbar can find it)
-- Bundles the Qt Designer `.ui` files
+- Bundles the Qt Designer `.ui` files and the Inter font
 - Adds `NSCameraUsageDescription` to Info.plist so macOS allows camera access
 - Writes logs to `~/Library/Application Support/NFCUrlWriter/` instead of the working directory
 
@@ -440,6 +439,10 @@ This produces a `dist/NFC URL Writer/` folder containing `NFC URL Writer.exe`. O
 - Try selecting a different camera from the dropdown
 - Ensure zbar library is installed
 
+### Wrong Camera Opens (macOS)
+
+Camera indices shift whenever devices appear or disappear (e.g. an iPhone coming into range). The app handles this by re-resolving the selected camera by name immediately before opening it, and by enumerating devices with the exact ordering OpenCV uses (sorted by AVFoundation `uniqueID`, excluding Desk View devices, which OpenCV cannot see). If the wrong camera still opens, stop and restart the camera - the device list is refreshed on every start.
+
 ## Project Structure
 
 ```
@@ -455,18 +458,21 @@ NFC_URL_Writer_pyapp/
 │   │   └── nfc_manager.py      # NFC reader and tag operations
 │   ├── qr/
 │   │   ├── __init__.py
-│   │   └── qr_scanner.py       # QR code scanning
+│   │   ├── qr_scanner.py       # QR code scanning
+│   │   └── macos_cameras.py    # AVFoundation camera enumeration (ctypes)
 │   └── ui/
 │       ├── __init__.py
 │       ├── main_window.py      # Main application window
 │       ├── main_window.ui      # Qt Designer UI file
 │       ├── theme.py            # Central light/dark palettes and stylesheet
+│       ├── fonts/              # Bundled Inter font
 │       ├── settings_dialog.py  # Settings dialog
 │       ├── settings_dialog.ui  # Qt Designer UI file
 │       ├── qr_dialog.py        # QR scanning dialog
 │       └── qr_dialog.ui        # Qt Designer UI file
 ├── app_entry.py                # PyInstaller entry point
 ├── nfc_url_writer.spec         # PyInstaller build spec
+├── pyi_rth_zbar.py             # PyInstaller runtime hook (zbar library path)
 ├── build_app.sh                # Standalone app build script
 ├── requirements.txt
 ├── pyproject.toml

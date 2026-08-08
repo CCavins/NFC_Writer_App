@@ -547,21 +547,26 @@ class MainWindow(QMainWindow):
                 'obs', 'virtual', 'screen', 'display'
             ])
             
+            # Names are stable across reconnects; indices shift as devices
+            # come and go - so name matches must always outrank index-only
+            # matches, or a stale saved index can select the wrong camera.
             if default_index is not None and default_name is not None:
                 if index == default_index and name == default_name:
                     match_score = 100
-                elif index == default_index:
-                    match_score = 50
+                elif default_name.lower() == name_lower:
+                    match_score = 90
                 elif default_name.lower() in name_lower or name_lower in default_name.lower():
-                    match_score = 40 if default_name.lower() == name_lower else 30
+                    match_score = 60
+                elif index == default_index:
+                    match_score = 20
             elif default_index is not None:
                 if index == default_index:
-                    match_score = 50
+                    match_score = 20
             elif default_name is not None:
                 if default_name.lower() == name_lower:
-                    match_score = 40
+                    match_score = 90
                 elif default_name.lower() in name_lower or name_lower in default_name.lower():
-                    match_score = 30
+                    match_score = 60
             
             if default_index is None and default_name is None:
                 if is_logitech:

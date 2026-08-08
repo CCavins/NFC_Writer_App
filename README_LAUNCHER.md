@@ -1,8 +1,27 @@
 # Quick Launch Options
 
-## Option 1: Double-Click Launcher (Easiest)
+## Option 1: Standalone Compiled App (Recommended)
 
-**`launch_app.command`** - Double-click this file in Finder to launch the app.
+Build once with PyInstaller, then use it like any other Mac app:
+
+```bash
+./build_app.sh
+```
+
+This creates `dist/NFC URL Writer.app` which you can:
+- Double-click to launch
+- Drag to the Applications folder
+- Add to the Dock
+- Launch from Spotlight (Cmd+Space) or Launchpad
+
+It is fully self-contained - no Python, venv, or Homebrew needed on the
+machine that runs it. The first launch may require right-click > Open
+(Gatekeeper), since the app is not notarized.
+
+## Option 2: Double-Click Launcher (Development)
+
+**`launch_app.command`** - Double-click this file in Finder to run the app
+from the project's virtual environment.
 
 1. In Finder, navigate to the project folder
 2. Double-click `launch_app.command`
@@ -10,36 +29,16 @@
 
 **Note:** The first time you run it, macOS may ask for permission. Right-click and select "Open" if needed.
 
-## Option 2: macOS App Bundle
-
-Create a proper macOS app bundle that can be placed in Applications:
+## Option 3: Terminal
 
 ```bash
-./create_app_bundle.sh
+./run.sh
 ```
 
-This creates `NFC URL Writer.app` which you can:
-- Double-click to launch
-- Drag to Applications folder
-- Add to Dock
-
-## Option 3: Terminal Alias
-
-Add this to your `~/.zshrc` or `~/.bash_profile`:
+Or add an alias to your `~/.zshrc`:
 
 ```bash
 alias nfc-writer="cd /Users/christophercavins/GitHub/NFC_URL_Writer_pyapp && ./run.sh"
 ```
 
 Then just type `nfc-writer` in Terminal.
-
-## Option 4: Spotlight/Launchpad
-
-After creating the app bundle (Option 2), you can:
-- Press Cmd+Space and type "NFC URL Writer"
-- Or find it in Launchpad
-
-## Recommended: Option 1 (launch_app.command)
-
-The simplest option is to double-click `launch_app.command` - it works immediately without any setup!
-

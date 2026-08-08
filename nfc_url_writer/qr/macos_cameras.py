@@ -77,15 +77,19 @@ def list_cameras() -> Optional[List[CameraInfo]]:
     if not _load_libraries():
         return None
     try:
-        # Enumerate every video device type so excluded devices (iPhones)
-        # still occupy their index slots. Some constants only exist on
-        # newer macOS versions, hence the per-symbol guard.
+        # Match the device set OpenCV sees. Its backend uses the legacy
+        # [AVCaptureDevice devicesWithMediaType:] API, which returns
+        # built-in, external, and Continuity (iPhone) cameras but NOT
+        # Desk View cameras - so Desk View must not occupy index slots
+        # here or every device after it would be off by one.
+        # (iPhones DO occupy slots; they are only hidden from the UI.)
+        # Some constants only exist on newer macOS versions, hence the
+        # per-symbol guard.
         types_list = []
         for symbol in (
             'AVCaptureDeviceTypeBuiltInWideAngleCamera',
             'AVCaptureDeviceTypeExternalUnknown',
             'AVCaptureDeviceTypeContinuityCamera',
-            'AVCaptureDeviceTypeDeskViewCamera',
         ):
             try:
                 types_list.append(_const(symbol))
@@ -122,10 +126,15 @@ def list_cameras() -> Optional[List[CameraInfo]]:
             if unique_id in seen_ids:
                 continue
             seen_ids.add(unique_id)
+            device_type = _to_str(_msg(dev, 'deviceType', ctypes.c_void_p, []))
+            # Defensive: never let a Desk View device claim an index slot,
+            # whichever discovery type it arrived through.
+            if 'DeskView' in device_type:
+                continue
             cameras.append(CameraInfo(
                 name=_to_str(_msg(dev, 'localizedName', ctypes.c_void_p, [])),
                 model=_to_str(_msg(dev, 'modelID', ctypes.c_void_p, [])),
-                device_type=_to_str(_msg(dev, 'deviceType', ctypes.c_void_p, [])),
+                device_type=device_type,
                 unique_id=unique_id,
             ))
 

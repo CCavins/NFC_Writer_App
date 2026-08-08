@@ -84,31 +84,33 @@ class QRScanDialog(QDialog):
             
             # Scoring:
             # 1. Exact match by index AND name: score 100
-            # 2. Exact match by index: score 50
-            # 3. Exact match by name: score 40
-            # 4. Partial name match: score 30
+            # 2. Exact match by name: score 90
+            # 3. Partial name match: score 60
+            # 4. Match by index only: score 20
             # 5. Logitech camera (if no default): score 20
             # 6. Non-virtual camera (if no default): score 10
             # 7. Virtual camera: score -10 (penalty)
             
+            # Names are stable across reconnects; indices shift as devices
+            # come and go - so name matches must always outrank index-only
+            # matches, or a stale saved index can select the wrong camera.
             if default_index is not None and default_name is not None:
                 if index == default_index and name == default_name:
                     match_score = 100  # Perfect match
-                elif index == default_index:
-                    match_score = 50  # Index matches
+                elif default_name.lower() == name_lower:
+                    match_score = 90  # Exact name match (index went stale)
                 elif default_name.lower() in name_lower or name_lower in default_name.lower():
-                    if default_name.lower() == name_lower:
-                        match_score = 40  # Exact name match
-                    else:
-                        match_score = 30  # Partial name match
+                    match_score = 60  # Partial name match
+                elif index == default_index:
+                    match_score = 20  # Index-only match (weakest signal)
             elif default_index is not None:
                 if index == default_index:
-                    match_score = 50
+                    match_score = 20
             elif default_name is not None:
                 if default_name.lower() == name_lower:
-                    match_score = 40
+                    match_score = 90
                 elif default_name.lower() in name_lower or name_lower in default_name.lower():
-                    match_score = 30
+                    match_score = 60
             
             # If no default specified, prefer Logitech and avoid virtual
             if default_index is None and default_name is None:
