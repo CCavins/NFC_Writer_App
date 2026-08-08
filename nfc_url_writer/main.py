@@ -6,6 +6,7 @@ import errno
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
+from .config.settings import get_log_path
 from .ui.main_window import MainWindow
 
 
@@ -29,13 +30,16 @@ class SafeStreamHandler(logging.StreamHandler):
 def main():
     """Main application entry point."""
     # Setup logging with safe stream handler
+    # force=True: import-time warnings may have auto-configured the root
+    # logger already, which would otherwise make this call a silent no-op.
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('nfc_url_writer.log'),
+            logging.FileHandler(get_log_path()),
             SafeStreamHandler()
-        ]
+        ],
+        force=True
     )
     logger = logging.getLogger(__name__)
     logger.info("Starting NFC URL Writer")

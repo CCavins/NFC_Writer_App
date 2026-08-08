@@ -95,11 +95,12 @@ class NFCManager(QObject):
         # Setup logging with safe stream handler
         # Only configure if not already configured (avoid duplicate handlers)
         if not logging.getLogger().handlers:
+            from ..config.settings import get_log_path
             logging.basicConfig(
                 level=logging.INFO,
                 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                 handlers=[
-                    logging.FileHandler('nfc_url_writer.log'),
+                    logging.FileHandler(get_log_path()),
                     SafeStreamHandler()
                 ]
             )

@@ -6,20 +6,33 @@ from pathlib import Path
 from typing import Optional
 
 
+def get_app_data_dir() -> Path:
+    """Return the per-user application data directory, creating it if needed."""
+    if os.name == 'nt':  # Windows
+        appdata = os.getenv('APPDATA', Path.home() / 'AppData' / 'Roaming')
+        data_dir = Path(appdata) / "NFCUrlWriter"
+    else:  # macOS and Linux
+        data_dir = Path.home() / "Library" / "Application Support" / "NFCUrlWriter"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+def get_log_path() -> Path:
+    """Return the log file path in the app data directory.
+
+    The log must not live in the current working directory: when the app is
+    launched as a packaged bundle from Finder, the working directory is not
+    writable and logging setup would crash the app.
+    """
+    return get_app_data_dir() / "nfc_url_writer.log"
+
+
 class Settings:
     """Manages application settings stored in a JSON config file."""
     
     def __init__(self):
         """Initialize settings and load from config file."""
-        # Determine config directory based on platform
-        if os.name == 'nt':  # Windows
-            # Use AppData\Roaming on Windows
-            appdata = os.getenv('APPDATA', Path.home() / 'AppData' / 'Roaming')
-            config_dir = Path(appdata) / "NFCUrlWriter"
-        else:  # macOS and Linux
-            config_dir = Path.home() / "Library" / "Application Support" / "NFCUrlWriter"
-        
-        config_dir.mkdir(parents=True, exist_ok=True)
+        config_dir = get_app_data_dir()
         self.config_path = config_dir / "config.json"
         
         # Default settings

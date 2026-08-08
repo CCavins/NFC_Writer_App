@@ -41,9 +41,9 @@ nfc_url_writer.log
 Thumbs.db
 
 # PyInstaller
-*.spec
 *.app
 *.exe
+!nfc_url_writer.spec
 
 # Config (optional - uncomment if you don't want to track config)
 # config.json

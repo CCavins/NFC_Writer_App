@@ -342,124 +342,32 @@ The app stores configuration in:
 - `last_written_url`: Last successfully written URL
 - `recent_urls`: List of recent URLs (max 20)
 
-## Packaging with PyInstaller
+## Building a Standalone App (PyInstaller)
 
-### Prerequisites
-
-Install PyInstaller:
-
-```bash
-pip install pyinstaller
-```
+The repository includes a ready-to-use PyInstaller spec (`nfc_url_writer.spec`) and build script. The result is a fully self-contained, double-clickable app — no Python, venv, or Homebrew paths required on the machine running it (the NFC reader driver and PC/SC are still needed).
 
 ### macOS
 
-Create a macOS app bundle:
-
 ```bash
-pyinstaller --name="NFC URL Writer" \
-    --windowed \
-    --onefile \
-    --add-data "nfc_url_writer:nfc_url_writer" \
-    --hidden-import PyQt6 \
-    --hidden-import nfctagger \
-    --hidden-import cv2 \
-    --hidden-import pyzbar \
-    --icon=resources/icon.icns \
-    nfc_url_writer/main.py
+./build_app.sh
 ```
 
-Or use the provided spec file (create one if needed):
+This produces `dist/NFC URL Writer.app`. Drag it to `/Applications` and double-click to run. The first launch may require right-click → Open (Gatekeeper), since the app is not notarized.
 
-```bash
-pyinstaller nfc_url_writer.spec
-```
-
-**Note**: You may need to include Qt plugins and frameworks. PyInstaller usually handles this automatically, but if you encounter issues, you may need to add:
-
-```bash
---collect-all PyQt6
-```
+The spec handles the packaging details automatically:
+- Bundles the zbar library for QR decoding (with a runtime hook so pyzbar can find it)
+- Bundles the Qt Designer `.ui` files
+- Adds `NSCameraUsageDescription` to Info.plist so macOS allows camera access
+- Writes logs to `~/Library/Application Support/NFCUrlWriter/` instead of the working directory
 
 ### Windows
 
-Create a Windows executable:
-
 ```bash
-pyinstaller --name="NFC URL Writer" \
-    --windowed \
-    --onefile \
-    --add-data "nfc_url_writer;nfc_url_writer" \
-    --hidden-import PyQt6 \
-    --hidden-import nfctagger \
-    --hidden-import cv2 \
-    --hidden-import pyzbar \
-    --icon=resources/icon.ico \
-    nfc_url_writer/main.py
+pip install pyinstaller
+pyinstaller --noconfirm nfc_url_writer.spec
 ```
 
-### PyInstaller Spec File Example
-
-Create `nfc_url_writer.spec`:
-
-```python
-# -*- mode: python ; coding: utf-8 -*-
-
-block_cipher = None
-
-a = Analysis(
-    ['nfc_url_writer/main.py'],
-    pathex=[],
-    binaries=[],
-    datas=[('nfc_url_writer', 'nfc_url_writer')],
-    hiddenimports=['PyQt6', 'nfctagger', 'cv2', 'pyzbar'],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='NFC URL Writer',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
-
-app = BUNDLE(
-    exe,
-    name='NFC URL Writer.app',
-    icon=None,
-    bundle_identifier='com.nfcurlwriter.app',
-)
-```
-
-Then build with:
-
-```bash
-pyinstaller nfc_url_writer.spec
-```
+This produces a `dist/NFC URL Writer/` folder containing `NFC URL Writer.exe`. On Windows, make sure a zbar DLL is available (see the zbar installation notes above).
 
 ## NFC Driver Requirements
 
