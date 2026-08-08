@@ -20,6 +20,7 @@ class CameraInfo(TypedDict):
     name: str
     model: str
     device_type: str
+    unique_id: str
 
 
 _objc = None
@@ -76,12 +77,20 @@ def list_cameras() -> Optional[List[CameraInfo]]:
     if not _load_libraries():
         return None
     try:
-        # Same device-type list as OpenCV's cap_avfoundation_mac.mm, so
-        # positions in this array equal OpenCV VideoCapture indices.
-        types_list = [
-            _const('AVCaptureDeviceTypeBuiltInWideAngleCamera'),
-            _const('AVCaptureDeviceTypeExternalUnknown'),
-        ]
+        # Enumerate every video device type so excluded devices (iPhones)
+        # still occupy their index slots. Some constants only exist on
+        # newer macOS versions, hence the per-symbol guard.
+        types_list = []
+        for symbol in (
+            'AVCaptureDeviceTypeBuiltInWideAngleCamera',
+            'AVCaptureDeviceTypeExternalUnknown',
+            'AVCaptureDeviceTypeContinuityCamera',
+            'AVCaptureDeviceTypeDeskViewCamera',
+        ):
+            try:
+                types_list.append(_const(symbol))
+            except ValueError:
+                pass
         media_video = _const('AVMediaTypeVideo')
 
         ns_array_cls = _objc.objc_getClass(b'NSArray')
@@ -105,14 +114,26 @@ def list_cameras() -> Optional[List[CameraInfo]]:
         count = _msg(devices, 'count', ctypes.c_ulong, [])
 
         cameras: List[CameraInfo] = []
+        seen_ids = set()
         for i in range(count):
             dev = _msg(devices, 'objectAtIndex:', ctypes.c_void_p,
                        [ctypes.c_ulong], i)
+            unique_id = _to_str(_msg(dev, 'uniqueID', ctypes.c_void_p, []))
+            if unique_id in seen_ids:
+                continue
+            seen_ids.add(unique_id)
             cameras.append(CameraInfo(
                 name=_to_str(_msg(dev, 'localizedName', ctypes.c_void_p, [])),
                 model=_to_str(_msg(dev, 'modelID', ctypes.c_void_p, [])),
                 device_type=_to_str(_msg(dev, 'deviceType', ctypes.c_void_p, [])),
+                unique_id=unique_id,
             ))
+
+        # CRITICAL: OpenCV's AVFoundation backend sorts devices by uniqueID
+        # ("Preserve devices ordering on the system" in
+        # cap_avfoundation_mac.mm), so VideoCapture(n) opens the n-th device
+        # of the uniqueID-sorted list - NOT the discovery order.
+        cameras.sort(key=lambda c: c['unique_id'])
         return cameras
     except Exception as e:
         logger.debug(f"AVFoundation camera enumeration failed: {e}")

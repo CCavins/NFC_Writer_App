@@ -32,8 +32,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         """Initialize main window."""
         super().__init__()
+        theme.install_fonts()
         self.setWindowTitle("NFC URL Writer")
-        self.setMinimumSize(1000, 680)
+        self.setMinimumSize(1000, 760)
         self.resize(1400, 900)
         
         # Initialize components
@@ -150,12 +151,18 @@ class MainWindow(QMainWindow):
         # Low-emphasis style for the retry reader button (styled via theme QSS)
         self.retry_reader_button.setProperty("class", "subtle")
         
-        # Set up camera preview label styling and size policy
+        # Set up camera preview label styling and size policy.
+        # Ignored policy means the label takes exactly the space the layout
+        # gives it - the pixmap can never push it larger, so the preview can
+        # never grow over the Start/Stop buttons below it.
         self.camera_preview_label.setProperty("class", "camera-preview")
-        # Allow camera preview to shrink when window is resized, but maintain aspect ratio
-        self.camera_preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.camera_preview_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.camera_preview_label.setMinimumSize(320, 160)
         self.camera_preview_label.setScaledContents(False)  # We'll handle scaling manually to maintain aspect ratio
         self.camera_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Plain QWidgets need this attribute for stylesheet backgrounds
+        self.status_panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         # Monospace font for the tag UID
         fixed_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)

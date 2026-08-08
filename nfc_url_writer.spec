@@ -29,6 +29,8 @@ a = Analysis(
     datas=[
         # Qt Designer layouts loaded at runtime via uic.loadUi()
         ("nfc_url_writer/ui/*.ui", "nfc_url_writer/ui"),
+        # Inter font (vixi design system typography)
+        ("nfc_url_writer/ui/fonts/*.ttf", "nfc_url_writer/ui/fonts"),
     ],
     hiddenimports=[
         "nfctagger",
