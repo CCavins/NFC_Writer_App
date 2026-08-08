@@ -163,7 +163,8 @@ class MainWindow(QMainWindow):
         self.tag_uid_label.setFont(fixed_font)
         
         # Set up read URL label
-        self._set_label(self.read_url_label, "", role="muted", italic=True)
+        self._set_label(self.read_url_label, "Place a tag on the reader to see its contents",
+                        role="muted", italic=True)
         self.read_url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.read_url_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         
@@ -476,6 +477,7 @@ class MainWindow(QMainWindow):
         if self.queue_mode_check.isChecked():
             # In queue mode, write current queue URL (no need to normalize, it's from queue)
             self.write_button.setEnabled(False)
+            self.write_button.setText("Writing...")
             current_url = self.nfc_manager.get_current_queue_url()
             url_preview = current_url[:50] + "..." if current_url and len(current_url) > 50 else current_url
             self.status_bar.showMessage(f"Starting write operation: {url_preview}", 0)
@@ -493,6 +495,7 @@ class MainWindow(QMainWindow):
             
             # Disable write button during operation
             self.write_button.setEnabled(False)
+            self.write_button.setText("Writing...")
             content_preview = content[:50] + "..." if len(content) > 50 else content
             self.status_bar.showMessage(f"Starting write operation: {content_preview}", 0)
             
@@ -524,7 +527,8 @@ class MainWindow(QMainWindow):
         
         for i, (index, name) in enumerate(cameras):
             # Store camera index as user data, display name as text
-            self.camera_combo.addItem(f"{name} (Index {index})", index)
+            self.camera_combo.addItem(name, index)
+            self.camera_combo.setItemData(i, name, Qt.ItemDataRole.ToolTipRole)
             
             # Calculate match score (same logic as QR dialog)
             match_score = 0
@@ -580,14 +584,9 @@ class MainWindow(QMainWindow):
             was_running = True
             self._stop_camera()
         
-        # Save camera selection - extract name without index suffix
+        # Save camera selection
         camera_index = self.camera_combo.currentData()
-        camera_text = self.camera_combo.currentText()
-        # Remove " (Index X)" suffix if present
-        if " (Index " in camera_text:
-            camera_name = camera_text.split(" (Index ")[0]
-        else:
-            camera_name = camera_text
+        camera_name = self.camera_combo.currentText()
         
         if camera_index is not None:
             self.settings.set_default_camera(camera_index, camera_name)
@@ -606,12 +605,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Camera", "Please select a valid camera.")
             return
         
+        # Re-resolve the index in case devices changed since detection
+        # (e.g. an iPhone Continuity Camera appeared and shifted indices)
+        camera_index = QRScanner.resolve_camera_index(camera_text, camera_index)
+        
         # Log which camera is being started for debugging
         self.logger.info(f"Starting camera: {camera_text} (Index {camera_index})")
         
         # Stop any existing scanner
         if self.qr_scanner_worker:
             self._stop_camera()
+        
+        self.camera_preview_label.setText("Starting camera...")
         
         # Create and start scanner worker with the camera index from combo box data
         self.qr_scanner_worker = QRScannerWorker(camera_index)
@@ -840,7 +845,8 @@ class MainWindow(QMainWindow):
         self.tag_type_label.setText("-")
         self.tag_capacity_label.setText("-")
         self.tag_writable_label.setText("-")
-        self._set_label(self.read_url_label, "", role="muted", italic=True)
+        self._set_label(self.read_url_label, "Place a tag on the reader to see its contents",
+                        role="muted", italic=True)
         self.read_url_label.setToolTip("")
         self.open_url_button.setEnabled(False)
         self.copy_url_button.setEnabled(False)
@@ -1109,8 +1115,9 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def _on_write_success(self) -> None:
         """Handle successful tag write."""
-        # Hide progress bar
+        # Hide progress bar and restore button label
         self.write_progress.setVisible(False)
+        self.write_button.setText("Write to tag")
         
         # Reset status to ready after a brief delay to show completion
         if self.tag_detected:
@@ -1221,8 +1228,9 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str)
     def _on_write_failed(self, error_msg: str) -> None:
         """Handle failed tag write."""
-        # Hide progress bar
+        # Hide progress bar and restore button label
         self.write_progress.setVisible(False)
+        self.write_button.setText("Write to tag")
         
         # Reset status
         if self.tag_detected:

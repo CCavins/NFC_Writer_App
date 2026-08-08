@@ -14,6 +14,8 @@ except ImportError:
     decode = None
     logging.warning("pyzbar not available")
 
+from . import macos_cameras
+
 
 class QRScannerWorker(QThread):
     """Worker thread for QR code scanning from camera."""
@@ -209,51 +211,28 @@ class QRScanner:
     """High-level QR scanner interface."""
     
     @staticmethod
-    def _is_camera_excluded(name: str, model_id: Optional[str] = None) -> bool:
+    def _is_camera_excluded(name: str, model_id: Optional[str] = None,
+                            device_type: Optional[str] = None) -> bool:
         """
         Check if a camera should be excluded from the list.
         
-        Excludes ALL iPhone/iPad cameras (mobile devices) regardless of naming.
-        Built-in and virtual cameras are included for user selection.
+        Excludes ALL iPhone/iPad cameras (mobile devices), including
+        Continuity Camera and Desk View. Regular UVC/USB webcams, built-in
+        cameras, and virtual cameras are included for user selection.
         """
-        if not name:
-            return False
-            
-        name_lower = name.lower()
+        # AVFoundation device types that are always the user's iPhone
+        if device_type:
+            type_lower = device_type.lower()
+            if 'continuitycamera' in type_lower or 'deskviewcamera' in type_lower:
+                return True
+        
+        mobile_terms = ['iphone', 'ipad', 'ipod', 'desk view']
+        name_lower = (name or "").lower()
+        if any(term in name_lower for term in mobile_terms):
+            return True
+        
         model_lower = (model_id or "").lower()
-        
-        # Exclude ALL iPhone/iPad cameras (mobile devices)
-        # Check for various iPhone/iPad indicators
-        iphone_terms = ['iphone', 'ipad', 'ipod']
-        
-        # 1. Check name for iPhone/iPad terms
-        if any(term in name_lower for term in iphone_terms):
-            return True
-        
-        # 2. Check model ID for iPhone/iPad patterns
-        if model_id:
-            model_lower = model_id.lower()
-            # Check for explicit iPhone/iPad terms
-            if any(term in model_lower for term in iphone_terms):
-                return True
-            # Check for iPhone/iPad model ID patterns (e.g., "iPhone16,1", "iPad14,1", "iPhone15,2")
-            # Pattern: starts with "iphone" or "ipad" followed by numbers
-            import re
-            if re.search(r'^iphone\d+', model_lower) or re.search(r'^ipad\d+', model_lower):
-                return True
-            # Also check if model contains iPhone/iPad anywhere
-            if 'iphone' in model_lower or 'ipad' in model_lower:
-                return True
-        
-        # 3. Check name with word boundaries (catches "iPhone Camera", "iPad Camera", etc.)
-        import re
-        if re.search(r'\biphone\b', name_lower) or re.search(r'\bipad\b', name_lower):
-            return True
-        
-        # 4. Check for common iPhone camera naming patterns
-        # Some iPhones might be named like "John's iPhone Camera" or just have iPhone in the name
-        # We're already checking for "iphone" in name_lower above, but be extra thorough
-        if 'iphone' in name_lower or 'ipad' in name_lower:
+        if any(term in model_lower for term in mobile_terms):
             return True
         
         return False
@@ -267,9 +246,31 @@ class QRScanner:
         Cameras are sorted by priority: Logitech > USB > Built-in > Virtual.
         
         This method does NOT open cameras, only detects them using system information.
-        Only iPhone/iPad cameras are filtered out (mobile devices).
-        Built-in and virtual cameras are included for user selection.
+        iPhone/iPad cameras (including Continuity Camera and Desk View) are
+        filtered out. Built-in and virtual cameras are included for selection.
         """
+        logger = logging.getLogger(__name__)
+        
+        # Preferred path (macOS): enumerate via AVFoundation. Device order
+        # matches OpenCV indices exactly, no camera is ever opened, and
+        # iPhones are excluded reliably by device type/model.
+        avf_devices = macos_cameras.list_cameras()
+        if avf_devices is not None:
+            cameras = []
+            for idx, dev in enumerate(avf_devices):
+                if QRScanner._is_camera_excluded(dev['name'], dev['model'], dev['device_type']):
+                    logger.info(
+                        f"Excluding mobile camera at index {idx}: "
+                        f"{dev['name']} (model: {dev['model']}, type: {dev['device_type']})"
+                    )
+                    continue
+                cameras.append((idx, dev['name']))
+            cameras.sort(key=QRScanner._camera_sort_key)
+            logger.info(f"AVFoundation cameras: {cameras}")
+            return cameras
+        
+        # Fallback path: system_profiler + OpenCV probing with heuristic
+        # index mapping (less reliable; may briefly open cameras)
         cameras = []
         filtered_camera_info = []  # List of (name, model_id) tuples from system_profiler
         
@@ -523,42 +524,60 @@ class QRScanner:
                     "Camera detection skipped to avoid activating unwanted cameras."
                 )
         
-        # Sort cameras with priority:
-        # 1. Logitech cameras (highest priority)
-        # 2. Other USB cameras
-        # 3. Built-in cameras
-        # 4. Virtual cameras (lowest priority)
-        def sort_key(cam_tuple):
-            index, name = cam_tuple
-            name_lower = name.lower()
-            
-            # Check if it's Logitech
-            is_logitech = any(term in name_lower for term in [
-                'logitech', 'c922', 'c920', 'c930', 'c270', 'c310', 'brio'
-            ])
-            
-            # Check if it's built-in
-            is_builtin = any(term in name_lower for term in [
-                'macbook', 'facetime', 'built-in', 'builtin', 
-                'integrated', 'internal'
-            ])
-            
-            # Check if it's virtual
-            is_virtual = any(term in name_lower for term in [
-                'obs', 'virtual', 'screen', 'display', 'webcamoid',
-                'manycam', 'camo', 'epoccam', 'droidcam', 'snap camera',
-                'zoom', 'teams', 'webex', 'skype'
-            ])
-            
-            if is_logitech:
-                return (-2, name_lower)  # Highest priority
-            elif is_builtin:
-                return (-1, name_lower)  # Medium-high priority
-            elif is_virtual:
-                return (1, name_lower)   # Lower priority (positive value)
-            else:
-                return (0, name_lower)   # Normal priority
-        
-        cameras.sort(key=sort_key)
+        cameras.sort(key=QRScanner._camera_sort_key)
         return cameras
+    
+    @staticmethod
+    def _camera_sort_key(cam_tuple):
+        """Sort priority: Logitech > other USB > built-in > virtual."""
+        index, name = cam_tuple
+        name_lower = name.lower()
+        
+        is_logitech = any(term in name_lower for term in [
+            'logitech', 'c922', 'c920', 'c930', 'c270', 'c310', 'brio'
+        ])
+        is_builtin = any(term in name_lower for term in [
+            'macbook', 'facetime', 'built-in', 'builtin',
+            'integrated', 'internal'
+        ])
+        is_virtual = any(term in name_lower for term in [
+            'obs', 'virtual', 'screen', 'display', 'webcamoid',
+            'manycam', 'camo', 'epoccam', 'droidcam', 'snap camera',
+            'zoom', 'teams', 'webex', 'skype'
+        ])
+        
+        if is_logitech:
+            return (-2, name_lower)  # Highest priority
+        elif is_builtin:
+            return (-1, name_lower)  # Medium-high priority
+        elif is_virtual:
+            return (1, name_lower)   # Lower priority (positive value)
+        else:
+            return (0, name_lower)   # Normal priority
+    
+    @staticmethod
+    def resolve_camera_index(camera_name: str, fallback_index: int) -> int:
+        """Re-resolve a camera's current OpenCV index by name.
+        
+        Continuity Cameras appearing or disappearing shifts OpenCV device
+        indices, so the index stored at detection time can go stale. Called
+        right before opening a camera to get its up-to-date index.
+        """
+        logger = logging.getLogger(__name__)
+        avf_devices = macos_cameras.list_cameras()
+        if avf_devices is None:
+            return fallback_index
+        for idx, dev in enumerate(avf_devices):
+            if dev['name'] == camera_name:
+                if idx != fallback_index:
+                    logger.info(
+                        f"Camera '{camera_name}' moved from index "
+                        f"{fallback_index} to {idx}"
+                    )
+                return idx
+        logger.warning(
+            f"Camera '{camera_name}' not found during re-resolution; "
+            f"using stored index {fallback_index}"
+        )
+        return fallback_index
 

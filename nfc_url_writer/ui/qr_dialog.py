@@ -68,8 +68,8 @@ class QRScanDialog(QDialog):
         best_match_score = -1
         
         for i, (index, name) in enumerate(cameras):
-            # Store camera index as user data, display name with index for clarity
-            self.camera_combo.addItem(f"{name} (Index {index})", index)
+            # Store camera index as user data, display name as text
+            self.camera_combo.addItem(name, index)
             
             # Calculate match score for this camera
             # Higher score = better match
@@ -140,15 +140,10 @@ class QRScanDialog(QDialog):
             was_running = True
             self._stop_camera()
         
-        # Save camera selection to settings - extract name without index suffix
+        # Save camera selection to settings
         if self.settings:
             camera_index = self.camera_combo.currentData()
-            camera_text = self.camera_combo.currentText()
-            # Remove " (Index X)" suffix if present
-            if " (Index " in camera_text:
-                camera_name = camera_text.split(" (Index ")[0]
-            else:
-                camera_name = camera_text
+            camera_name = self.camera_combo.currentText()
             if camera_index is not None:
                 self.settings.set_default_camera(camera_index, camera_name)
                 self.logger.debug(f"Selected camera: {camera_name} (Index {camera_index})")
@@ -169,6 +164,9 @@ class QRScanDialog(QDialog):
         if camera_index is None:
             QMessageBox.warning(self, "No Camera", "Please select a valid camera.")
             return
+        
+        # Re-resolve the index in case devices changed since detection
+        camera_index = QRScanner.resolve_camera_index(camera_text, camera_index)
         
         # Log which camera is being started for debugging
         self.logger.info(f"Starting camera: {camera_text} (Index {camera_index})")
